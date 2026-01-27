@@ -1,0 +1,27 @@
+{
+  "name": "cre8/cre8pw",
+  "description": "CRE8.pw platform",
+  "type": "project",
+  "require": {
+    "php": "^8.3",
+    "slim/slim": "^4.15",
+    "slim/psr7": "^1.7",
+    "php-di/php-di": "^7.1",
+    "firebase/php-jwt": "^6.11",
+    "ext-pdo": "*",
+    "ext-sodium": "*",
+    "respect/validation": "^2.4",
+    "vlucas/phpdotenv": "^5.6",
+    "guzzlehttp/guzzle": "^7.10",
+    "neomerx/cors-psr7": "^3.0",
+    "slim/csrf": "^1.5",
+    "monolog/monolog": "^3.9",
+    "symfony/rate-limiter": "^7.3",
+    "symfony/cache": "^7.3"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  }
+}

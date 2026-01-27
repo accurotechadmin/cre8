@@ -1,0 +1,434 @@
+{
+  "01-getting-started/introduction.md": {
+    "metadata": {
+      "version": "1.0.0",
+      "last_updated": "2026-01-25",
+      "status": "Canonical"
+    },
+    "core_definition": {
+      "product": "CRE8.pw",
+      "description": "Secure content creation and sharing platform built on hierarchical key-based authentication with full provenance tracking.",
+      "target_audience": "Developers needing drop-in auth/authz, Content Creators requiring provenance, Organizations needing secure sharing."
+    },
+    "key_features": [
+      "Hierarchical Authentication (Primary -> Secondary -> Use keys)",
+      "Fine-Grained Access Control (Global permissions + Post bitmasks)",
+      "Full Provenance Tracking (Root lineage tracing)",
+      "Dual-Surface Architecture (Console for Humans, Gateway for Machines)",
+      "Secure Sharing (Single-use/Limited-use keys with device restrictions)"
+    ],
+    "principals": {
+      "owners": {
+        "type": "Human",
+        "auth": "Email + Password",
+        "interface": "Console (Web + JSON)",
+        "capabilities": ["Mint Primary Author Keys", "Manage groups/keychains", "View lineage"]
+      },
+      "keys": {
+        "type": "Machine",
+        "auth": "ApiKey (public_id + secret)",
+        "interface": "Gateway (JSON API)",
+        "subtypes": {
+          "primary_author_key": "Root key; can create posts and mint child keys",
+          "secondary_author_key": "Delegated key; can create posts/mint keys within envelope",
+          "use_key": "Interaction only; read/comment; NO post creation/minting"
+        }
+      }
+    },
+    "authorization_model_summary": {
+      "layers": ["Global Permission Strings", "Post-Level Bitmasks"],
+      "rule": "Action requires BOTH permission string AND specific bitmask (if post-scoped).",
+      "envelope_rule": "Child permissions must be a subset of Parent permissions.",
+      "immutability": "Permissions cannot change after minting; requires rotation."
+    },
+    "quick_start_workflows": {
+      "owners": ["Register", "Login", "Mint Primary Author Key", "Switch to Gateway"],
+      "developers": ["Obtain Primary Key", "Exchange for JWT", "Make Authenticated Requests", "Handle Refresh"],
+      "content_sharers": ["Create Post", "Mint Use Key", "Grant Access", "Share Key Credentials"]
+    },
+    "architecture_summary": {
+      "stack": ["PHP 8.3", "Slim 4.15", "MariaDB 11.4", "RS256 JWT", "Argon2id"],
+      "security_posture": ["Strict HSTS", "Single-use Refresh Tokens", "No Secret Logging", "Input Validation"]
+    },
+    "navigation_guide": {
+      "by_role": {
+        "owner": ["introduction", "authentication", "key-lifecycle", "post-sharing"],
+        "developer": ["introduction", "architecture-overview", "authentication", "authorization", "api-reference", "implementation-guide"],
+        "debugger": ["response-schemas", "logging-and-audit"]
+      },
+      "sot_map": "Mapping of specific system aspects (e.g., Auth, Data Model) to authoritative documents."
+    }
+  },
+  "04-architecture/architecture-overview.md": {
+    "metadata": {
+      "scope": "Request lifecycle, middleware ordering, validation selection, security boundaries.",
+      "sot_ownership": ["Middleware ordering", "CSRF scope", "Validation selection rules"]
+    },
+    "architecture_high_level": {
+      "framework": "Slim 4",
+      "surfaces": ["Console (Owner-facing)", "Gateway (API-facing)"],
+      "layering": "Middleware -> Controller -> Service -> Repository"
+    },
+    "surfaces_and_request_types": {
+      "console_html": {
+        "routes": ["/", "/console/register", "/console/login", "/console/dashboard"],
+        "auth": "Session/Owner JWT",
+        "csrf": "Required (HTML Forms)",
+        "response": "HTML"
+      },
+      "console_json": {
+        "routes": ["/console/*"],
+        "auth": "Owner JWT (typ=owner)",
+        "csrf": "Not Required",
+        "response": "JSON"
+      },
+      "gateway_json": {
+        "routes": ["/api/* (excluding auth)"],
+        "auth": "Key JWT (typ=key)",
+        "csrf": "Not Required",
+        "response": "JSON"
+      },
+      "public_api": {
+        "routes": ["/health", "/.well-known/jwks.json", "/api/auth/*"],
+        "auth": "None / Basic",
+        "csrf": "Not Applicable",
+        "response": "JSON"
+      }
+    },
+    "middleware_pipelines": {
+      "public_api": ["Https", "Cors", "RateLimit (IP)", "BodyParsing", "Validation", "Routing", "ErrorHandling"],
+      "console_json": ["Https", "Cors", "RateLimit (OwnerID)", "JwtOwner", "BodyParsing", "Validation", "Routing", "ErrorHandling"],
+      "gateway_json": ["Https", "Cors", "RateLimit (KeyID)", "JwtKey", "BodyParsing", "Validation", "Routing", "ErrorHandling"],
+      "console_html": ["Https", "Cors", "RateLimit (IP/Session)", "CsrfGuard", "CsrfExpose", "Render HTML", "ErrorHandling"]
+    },
+    "component_responsibilities": {
+      "https_middleware": "Enforce HTTPS, set HSTS headers.",
+      "cors_middleware": "Apply Allow-Origin/Methods/Headers from env config.",
+      "ratelimit_middleware": "Throttle requests. Buckets: GENERAL, AUTH, API. Keys: IP, OwnerID, KeyID.",
+      "jwt_middleware": "Verify RS256 signature, enforce 'typ' claim, attach principal context.",
+      "validation_middleware": "Select validator by 'METHOD /pattern', return 422 on failure.",
+      "error_handling_middleware": "Catch exceptions, normalize to standard JSON error format, log details."
+    },
+    "validation_rules": {
+      "config_file": "config/validation.php",
+      "selection_key": "METHOD /route/pattern",
+      "behavior": "Reject unknown fields, 422 response with field details."
+    },
+    "security_specs": {
+      "csrf": "Applied strictly to HTML routes only.",
+      "hsts": "max-age=31536000; includeSubDomains (Production only).",
+      "rate_limit_storage": "Memory or Database (No Redis/Memcached in v1)."
+    }
+  },
+  "05-authentication-authorization/authentication.md": {
+    "metadata": {
+      "scope": "JWT structure, ApiKey exchange, Login flows, Refresh token lifecycle.",
+      "sot_ownership": ["JWT specs", "Refresh rotation", "ApiKey exchange logic", "JWKS endpoint"]
+    },
+    "principals": {
+      "owner": {
+        "auth": "Email + Password (Argon2id)",
+        "token_type": "typ=owner",
+        "capabilities": "Mint Primary Keys, Manage Groups"
+      },
+      "key": {
+        "auth": "ApiKey (Public ID + Secret)",
+        "token_type": "typ=key",
+        "capabilities": "API interactions defined by permissions"
+      }
+    },
+    "jwt_specifications": {
+      "algorithm": "RS256",
+      "claims_standard": ["iss", "sub", "aud", "iat", "nbf", "exp"],
+      "claims_custom": ["typ", "owner_id", "key_id", "key_public_id", "roles", "permissions"],
+      "subject_convention": "owner:{hex32} OR key:{hex32}",
+      "token_ttl": "15 minutes (default)"
+    },
+    "apikey_exchange_flow": {
+      "endpoint": "POST /api/auth/exchange",
+      "input": "Header 'Authorization: ApiKey <public_id>:<secret>'",
+      "process": "Lookup public_id -> verify secret hash -> check active -> issue tokens",
+      "security": "Generic error on failure (prevent enumeration)."
+    },
+    "refresh_token_lifecycle": {
+      "storage": "Hashed (Argon2id) in 'refresh_tokens' table.",
+      "policy": "Single-use rotation.",
+      "ttl": "30 days.",
+      "replay_detection": "If 'rotated_at' is not null during use, block and log security event."
+    },
+    "jwks_endpoint": {
+      "path": "/.well-known/jwks.json",
+      "content": "RS256 public keys",
+      "caching": "max-age=600",
+      "rotation": "Support key overlap via 'kid'."
+    }
+  },
+  "05-authentication-authorization/authorization.md": {
+    "metadata": {
+      "scope": "Permission strings, roles, bitmasks, envelope rules.",
+      "sot_ownership": ["Permission catalog", "Bitmask definitions", "Envelope rule", "Combined checks"]
+    },
+    "model_overview": "Two-layer system: Global Permission Strings + Post-Scoped Bitmasks.",
+    "permission_catalog": {
+      "owner_scoped": ["owners:manage", "keys:issue", "keys:read", "keys:rotate", "keys:state:update", "groups:manage", "keychains:manage", "posts:admin:read", "posts:access:manage"],
+      "key_scoped": ["keys:issue", "posts:create", "posts:read", "comments:write", "groups:read", "keychains:manage", "posts:access:manage"]
+    },
+    "post_bitmasks": {
+      "storage": "Integer in post_access table",
+      "bits": {
+        "0x01": "VIEW (Read)",
+        "0x02": "COMMENT (Write Comment)",
+        "0x08": "MANAGE_ACCESS (Grant/Revoke)"
+      },
+      "presets": {
+        "READ_ONLY": "0x01",
+        "INTERACT": "0x03",
+        "ADMIN": "0x0B"
+      }
+    },
+    "envelope_rule": {
+      "definition": "Child permissions must be a strict subset of Parent permissions.",
+      "validation": "Checked at mint time.",
+      "immutability": "Permissions cannot change after minting (must rotate key)."
+    },
+    "key_restrictions": {
+      "use_key": "MUST NOT have 'posts:create' or 'keys:issue'."
+    },
+    "combined_checks_examples": {
+      "read_post": "Global 'posts:read' + Post Mask 'VIEW'",
+      "create_comment": "Global 'comments:write' + Post Mask 'COMMENT'",
+      "grant_access": "Global 'posts:access:manage' + Post Mask 'MANAGE_ACCESS'"
+    },
+    "response_rules": {
+      "404": "Resource does not exist OR Principal lacks VIEW mask (hide existence).",
+      "403": "Resource exists and visible, but Principal lacks specific permission for action."
+    }
+  },
+  "06-api-reference/api-reference.md": {
+    "metadata": {
+      "scope": "Endpoint catalog, auth requirements, ownership mapping.",
+      "sot_ownership": ["Route definitions", "Controller/Service map"]
+    },
+    "id_conventions": {
+      "params": "All {paramId} are hex32. {keyPublicId} is 'apub_...'.",
+      "response": "Standardized JSON envelopes."
+    },
+    "route_groups": {
+      "public_html": [
+        {"method": "GET", "path": "/", "purpose": "Landing"},
+        {"method": "GET", "path": "/console/login", "purpose": "Login Form"}
+      ],
+      "public_api": [
+        {"method": "GET", "path": "/health", "purpose": "Health Check"},
+        {"method": "GET", "path": "/.well-known/jwks.json", "purpose": "JWKS"},
+        {"method": "POST", "path": "/api/auth/exchange", "purpose": "ApiKey Auth"},
+        {"method": "POST", "path": "/api/auth/refresh", "purpose": "Token Refresh"}
+      ],
+      "console_json": [
+        {"method": "POST", "path": "/console/keys/primary", "auth": "Owner", "perm": "keys:issue"},
+        {"method": "GET", "path": "/console/keys", "auth": "Owner", "perm": "keys:read"},
+        {"method": "POST", "path": "/console/groups", "auth": "Owner", "perm": "groups:manage"},
+        {"method": "GET", "path": "/console/posts", "auth": "Owner", "perm": "posts:admin:read"}
+      ],
+      "gateway_json": [
+        {"method": "POST", "path": "/api/keys/{id}/secondary", "auth": "Key", "perm": "keys:issue"},
+        {"method": "POST", "path": "/api/keys/{id}/use", "auth": "Key", "perm": "keys:issue"},
+        {"method": "POST", "path": "/api/posts", "auth": "Key", "perm": "posts:create"},
+        {"method": "GET", "path": "/api/posts/{id}", "auth": "Key", "perm": "posts:read + VIEW"},
+        {"method": "POST", "path": "/api/posts/{id}/access", "auth": "Key", "perm": "posts:access:manage + MANAGE_ACCESS"}
+      ]
+    },
+    "ownership_map": {
+      "Owners": "OwnerController / OwnerService / OwnerRepository",
+      "Keys": "KeyController / KeyService / KeyRepository",
+      "Posts": "PostController / PostService / PostRepository",
+      "Feeds": "FeedController / FeedService / PostRepository"
+    }
+  },
+  "06-api-reference/feed-system.md": {
+    "metadata": {
+      "scope": "Feed endpoints, visibility logic, pagination.",
+      "sot_ownership": ["Feed logic", "Visibility resolution", "Pagination"]
+    },
+    "endpoints": {
+      "use_key_feed": "GET /api/feed/use/{useKeyId}",
+      "author_feed": "GET /api/feed/author (Future)"
+    },
+    "visibility_rules": {
+      "logic": "Include post if Key has 'posts:read' AND (Direct VIEW grant OR Group VIEW grant).",
+      "security": "Path {useKeyId} must match JWT 'key_id'. Return 404 on mismatch."
+    },
+    "pagination": {
+      "type": "Cursor-based",
+      "params": ["limit (default 20, max 100)", "before_id (older)", "since_id (newer)"],
+      "cursors": "Currently uses post_id (hex32)."
+    },
+    "performance": {
+      "indexes": "post_access(post_id, target_type, target_id), posts(created_at DESC).",
+      "caching": "None in v1; Database query only."
+    }
+  },
+  "07-data-model/database-schema.md": {
+    "metadata": {
+      "scope": "Database schema, ID formats, table definitions.",
+      "sot_ownership": ["Schema definition", "ID encoding", "Migration order"]
+    },
+    "database_baseline": {
+      "engine": "MariaDB 11.4.x",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_bin",
+      "access": "PDO Prepared Statements"
+    },
+    "id_formats": {
+      "internal": "BINARY(16)",
+      "external": "hex32",
+      "public_id": "apub_... (VARCHAR)"
+    },
+    "tables": {
+      "owners": ["id", "email", "password_hash", "timestamps"],
+      "keys": ["id", "type", "key_secret_hash", "permissions_json", "active", "lineage_fields", "use_limits", "timestamps"],
+      "key_public_ids": ["id", "key_id", "key_public_id"],
+      "posts": ["id", "author_key_id", "initial_author_key_id", "title", "content", "timestamps"],
+      "comments": ["id", "post_id", "created_by_key_id", "body", "timestamps"],
+      "post_access": ["id", "post_id", "target_type", "target_id", "permission_mask"],
+      "groups": ["id", "owner_id", "name"],
+      "group_members": ["group_id", "key_id"],
+      "keychains": ["id", "name", "owner_id"],
+      "keychain_members": ["keychain_id", "key_id"],
+      "refresh_tokens": ["id", "subject_type", "subject_id", "token_hash", "dates", "replay_fields"],
+      "audit_events": ["id", "actor_type", "actor_id", "action", "subject", "metadata", "ip", "ua"]
+    },
+    "migration_order": ["001_owners", "002_keys", "003_posts", "004_groups", "005_keychains", "006_tokens", "007_audit", "008_indexes", "009_fks"]
+  },
+  "03-core-concepts/key-lifecycle.md": {
+    "metadata": {
+      "scope": "Key minting, rotation, lineage, limits.",
+      "sot_ownership": ["Minting workflows", "Lineage invariants", "Rotation logic"]
+    },
+    "lifecycle_workflows": {
+      "mint_primary": "Owner mints via Console. Lineage fields are NULL/Self. Secret returned once.",
+      "mint_secondary": "Author mints via Gateway. Lineage copied from parent. Envelope check applied.",
+      "mint_use": "Author mints via Gateway. Restrictions applied (No create/issue). Limits set.",
+      "rotation": "Replace key permissions/secret. Preserve lineage. Retire old key.",
+      "activation": "Toggle 'active' flag. Support cascading deactivation."
+    },
+    "provenance_fields": ["issued_by_key_id", "parent_key_id", "initial_author_key_id"],
+    "usage_limits": {
+      "use_count": "Limit total exchanges. Increment on exchange.",
+      "device_limit": "Limit distinct device fingerprints (IP+UA)."
+    },
+    "accountability": {
+      "cascade_disable": "Owner can disable a Primary Key and automatically disable all downstream keys."
+    }
+  },
+  "03-core-concepts/post-sharing.md": {
+    "metadata": {
+      "scope": "Post creation, access grants, sharing workflows.",
+      "sot_ownership": ["Access model", "Sharing workflows", "Mask enforcement"]
+    },
+    "access_model": {
+      "default": "Private (visible only to author).",
+      "grants": "Entries in 'post_access' mapping Post -> Target (Key/Group) + Mask."
+    },
+    "sharing_workflows": {
+      "use_key": "Mint Use Key -> Grant Access -> Share Credentials -> Recipient Consumes.",
+      "group": "Create Group -> Add Keys -> Grant Group Access -> Members Inherit."
+    },
+    "mask_enforcement": {
+      "view": "Requires VIEW (0x01).",
+      "comment": "Requires COMMENT (0x02).",
+      "manage": "Requires MANAGE_ACCESS (0x08)."
+    },
+    "revocation": {
+      "methods": ["Revoke specific grant", "Revoke group grant", "Remove key from group", "Deactivate key"],
+      "effect": "Immediate loss of access."
+    }
+  },
+  "08-implementation/implementation-guide.md": {
+    "metadata": {
+      "scope": "Developer manual, tech stack, code patterns.",
+      "sot_ownership": ["Project structure", "DI wiring", "Validation config"]
+    },
+    "tech_stack": ["PHP 8.3", "Slim 4", "MariaDB 11.4", "PHP-DI", "Monolog", "Guzzle", "Respect/Validation"],
+    "layer_responsibilities": {
+      "controller": "HTTP I/O only. No business logic.",
+      "service": "Business logic, Permissions, Transactions, Audits.",
+      "repository": "SQL/PDO only. Hex32 <-> Binary conversion.",
+      "middleware": "Cross-cutting (Auth, RateLimit, Cors)."
+    },
+    "configuration": {
+      "di": "config/container.php",
+      "validation": "config/validation.php",
+      "routes": "config/routes.php"
+    },
+    "checklist": "Steps for adding new capabilities (Surface -> Auth -> Perms -> Code -> Test)."
+  },
+  "06-api-reference/response-schemas.md": {
+    "metadata": {
+      "scope": "JSON schemas, error codes, status mapping.",
+      "sot_ownership": ["Response envelopes", "Error taxonomy"]
+    },
+    "schemas": {
+      "success_single": "{ data: Object }",
+      "success_list": "{ data: Array, paging: Object }",
+      "error": "{ error: { code, message, details, request_id } }"
+    },
+    "error_taxonomy": {
+      "400": "bad_request",
+      "401": "unauthorized",
+      "403": "forbidden",
+      "404": "not_found",
+      "422": "validation_failed (includes 'details.fields')",
+      "429": "rate_limited",
+      "500": "internal_error"
+    },
+    "security_rules": {
+      "auth_errors": "Generic messages for login/exchange failures.",
+      "server_errors": "No stack traces or secrets in production responses."
+    }
+  },
+  "09-operations/logging-and-audit.md": {
+    "metadata": {
+      "scope": "Logging standards, audit events, rate limiting.",
+      "sot_ownership": ["Log channels", "Audit catalog", "Rate limit config"]
+    },
+    "logging": {
+      "format": "Structured JSON",
+      "channels": ["api", "auth", "security", "db", "guzzle.http"],
+      "forbidden_fields": ["Passwords", "Secrets", "Refresh Tokens", "Private Keys"],
+      "allowed_fields": ["owner_id", "key_id", "key_public_id", "sub", "ip"]
+    },
+    "audit_events": {
+      "table": "audit_events",
+      "structure": "Actor -> Action -> Subject",
+      "catalog": ["keys:mint", "keys:rotate", "owners:login", "posts:create", "posts:access:grant", "refresh:replay_attempt"]
+    },
+    "rate_limiting": {
+      "buckets": ["GENERAL", "AUTH", "API"],
+      "strategies": "IP (Public), OwnerID (Console), KeyID (Gateway)",
+      "storage": "Memory or Database"
+    }
+  },
+  "10-reference/identifier-encoding.md": {
+    "content_summary": {
+      "internal_db": "BINARY(16)",
+      "external_api": "hex32 (32-char hex)",
+      "public_id": "apub_... (used only for initial exchange)",
+      "conversion": "Strictly at Repository boundary via Utilities/Ids.php",
+      "jwt_claims": "Uses hex32 for 'owner_id' and 'key_id'."
+    }
+  },
+  "10-reference/environment-configuration.md": {
+    "content_summary": {
+      "scope": "Complete .env reference.",
+      "critical_vars": ["DB_*", "JWT_PRIVATE/PUBLIC_KEY_PATH", "JWT_ISSUER/AUDIENCE"],
+      "bootstrap_validation": "App fails fast if critical vars missing or connections fail."
+    }
+  },
+  "03-core-concepts/glossary.md": {
+    "content_summary": {
+      "scope": "Definitions of terms (Principal, Surface, Envelope Rule, etc.).",
+      "quick_ref": "Permission strings, Bitmask values, ID formats."
+    }
+  }
+}
