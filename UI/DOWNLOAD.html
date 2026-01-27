@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download CRE8.pw Vanilla Files</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 3rem;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+        
+        .subtitle {
+            color: #718096;
+            margin-bottom: 2rem;
+            font-size: 0.875rem;
+        }
+        
+        .file-list {
+            background: #f7fafc;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: white;
+            border-radius: 0.375rem;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .file-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .file-name {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            color: #2d3748;
+        }
+        
+        .file-size {
+            font-size: 0.75rem;
+            color: #a0aec0;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+        
+        .btn:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #48bb78;
+        }
+        
+        .btn-secondary:hover {
+            background: #38a169;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .instructions {
+            background: #edf2f7;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-top: 2rem;
+        }
+        
+        .instructions h3 {
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            color: #2d3748;
+        }
+        
+        .instructions ol {
+            margin-left: 1.5rem;
+            font-size: 0.875rem;
+            color: #4a5568;
+        }
+        
+        .instructions li {
+            margin-bottom: 0.25rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: #667eea;
+            color: white;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="badge">✨ Vanilla JS Version</div>
+        <h1>CRE8.pw Files Ready!</h1>
+        <p class="subtitle">No build tools required • Works offline • Zero dependencies</p>
+        
+        <div class="file-list">
+            <div class="file-item">
+                <span class="file-name">📄 index.html</span>
+                <span class="file-size">~2 KB</span>
+            </div>
+            <div class="file-item">
+                <span class="file-name">🎨 styles.css</span>
+                <span class="file-size">~18 KB</span>
+            </div>
+            <div class="file-item">
+                <span class="file-name">⚡ app.js</span>
+                <span class="file-size">~45 KB</span>
+            </div>
+            <div class="file-item">
+                <span class="file-name">🎯 icons.js</span>
+                <span class="file-size">~3 KB</span>
+            </div>
+            <div class="file-item">
+                <span class="file-name">📖 README.md</span>
+                <span class="file-size">~6 KB</span>
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <button class="btn" onclick="downloadAll()">📥 Download All Files</button>
+            <button class="btn btn-secondary" onclick="copyInstructions()">📋 Copy File Paths</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>📌 Quick Start:</h3>
+            <ol>
+                <li>Download all files to a folder</li>
+                <li>Open index.html in your browser, or</li>
+                <li>Run a local server: <code>python -m http.server 8000</code></li>
+                <li>Navigate to http://localhost:8000</li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        function downloadAll() {
+            alert('Please navigate to the /vanilla/ folder in your project and copy these files:\n\n' +
+                  '• index.html\n' +
+                  '• styles.css\n' +
+                  '• app.js\n' +
+                  '• icons.js\n' +
+                  '• README.md\n\n' +
+                  'All files are ready in the /vanilla/ directory!');
+        }
+        
+        function copyInstructions() {
+            const text = 'Files are located in /vanilla/ directory:\n' +
+                        '- /vanilla/index.html\n' +
+                        '- /vanilla/styles.css\n' +
+                        '- /vanilla/app.js\n' +
+                        '- /vanilla/icons.js\n' +
+                        '- /vanilla/README.md';
+            
+            navigator.clipboard.writeText(text).then(() => {
+                alert('✅ File paths copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
